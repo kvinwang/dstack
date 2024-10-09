@@ -18,5 +18,8 @@ members = [
 ]
 resolver = "2"
 
+[profile.release]
+strip = "debuginfo"
+
 [patch.crates-io]
 dcap-qvl = { git = "https://github.com/Phala-Network/dcap-qvl.git" }
