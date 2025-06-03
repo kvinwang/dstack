@@ -60,8 +60,8 @@ struct Config {
     cf_zone_id: String,
     /// Auto set CAA record
     auto_set_caa: bool,
-    /// Domain to issue certificates for
-    domain: String,
+    /// List of domains to issue certificates for
+    domains: Vec<String>,
     /// Renew interval in seconds
     renew_interval: u64,
     /// Number of days before expiration to trigger renewal
@@ -81,7 +81,7 @@ impl Default for Config {
             cf_api_token: "".into(),
             cf_zone_id: "".into(),
             auto_set_caa: true,
-            domain: "example.com".into(),
+            domains: vec!["example.com".into()],
             renew_interval: 3600,
             renew_days_before: 10,
             renew_timeout: 120,
@@ -125,7 +125,7 @@ fn load_config(config: &PathBuf) -> Result<CertBotConfig> {
         .cert_file(workdir.cert_path())
         .key_file(workdir.key_path())
         .auto_create_account(true)
-        .cert_subject_alt_names(vec![config.domain])
+        .cert_subject_alt_names(config.domains)
         .cf_zone_id(config.cf_zone_id)
         .cf_api_token(config.cf_api_token)
         .renew_interval(renew_interval)
