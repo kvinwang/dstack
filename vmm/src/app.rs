@@ -178,12 +178,6 @@ impl App {
                 workdir: vm_work_dir.path().to_path_buf(),
                 gateway_enabled: app_compose.gateway_enabled(),
             };
-            if vm_config.manifest.disk_size > self.config.cvm.max_disk_size {
-                bail!(
-                    "disk size too large, max size is {}",
-                    self.config.cvm.max_disk_size
-                );
-            }
             match states.get_mut(&vm_id) {
                 Some(vm) => {
                     vm.config = vm_config.into();

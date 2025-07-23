@@ -362,10 +362,6 @@ impl VmmRpc for RpcHandler {
             manifest.image = image;
         }
         if let Some(disk_size) = request.disk_size {
-            let max_disk_size = self.app.config.cvm.max_disk_size;
-            if disk_size > max_disk_size {
-                bail!("Disk size is too large, max is {max_disk_size}GB");
-            }
             if disk_size < manifest.disk_size {
                 bail!("Cannot shrink disk size");
             }
@@ -439,7 +435,6 @@ impl VmmRpc for RpcHandler {
                 max_cvm_number: self.app.config.cvm.cid_pool_size,
                 max_allocable_vcpu: self.app.config.cvm.max_allocable_vcpu,
                 max_allocable_memory_in_mb: self.app.config.cvm.max_allocable_memory_in_mb,
-                max_disk_size_in_gb: self.app.config.cvm.max_disk_size,
             }),
         })
     }
