@@ -53,8 +53,6 @@ jobs:
           build-args: |
             DSTACK_REV=${{ env.GIT_REV }}
             SOURCE_DATE_EPOCH=${{ env.TIMESTAMP }}
-          outputs: |
-            type=docker,name=${{ vars.DOCKERHUB_USERNAME }}/gateway:${{ env.VERSION }},rewrite-timestamp=true
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v1
