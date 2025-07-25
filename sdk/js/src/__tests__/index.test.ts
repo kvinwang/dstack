@@ -4,6 +4,13 @@ import { DstackClient } from '../index'
 describe('DstackClient', () => {
   it('should able to derive key', async () => {
     const client = new DstackClient()
+    const result = await client.deriveKey('/', 'test')
+    expect(result).toHaveProperty('key')
+    expect(result).toHaveProperty('certificate_chain')
+  })
+
+  it('should able to get key', async () => {
+    const client = new DstackClient()
     const result = await client.getKey('/', 'test')
     expect(result).toHaveProperty('key')
     expect(result).toHaveProperty('signature_chain')
@@ -141,7 +148,7 @@ describe('DstackClient', () => {
       
       const result = await client.deriveKey('/', 'test')
       expect(result).toHaveProperty('key')
-      expect(result).toHaveProperty('signature_chain')
+      expect(result).toHaveProperty('certificate_chain')
       expect(consoleSpy).toHaveBeenCalledWith('deriveKey is deprecated, please use getKey instead')
       
       consoleSpy.mockRestore()

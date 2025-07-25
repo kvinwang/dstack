@@ -126,16 +126,23 @@ export interface TlsKeyOptions {
 
 export class DstackClient {
   private endpoint: string
+  private tappdEndpoint: string
 
   constructor(endpoint: string = '/var/run/dstack.sock') {
+    var tappdEndpoint = '/var/run/tappd.sock'
     if (process.env.DSTACK_SIMULATOR_ENDPOINT) {
       console.warn(`Using simulator endpoint: ${process.env.DSTACK_SIMULATOR_ENDPOINT}`)
       endpoint = process.env.DSTACK_SIMULATOR_ENDPOINT
+    }
+    if (process.env.TAPPD_SIMULATOR_ENDPOINT) {
+      console.warn(`Using tappd endpoint: ${process.env.TAPPD_SIMULATOR_ENDPOINT}`)
+      tappdEndpoint = process.env.TAPPD_SIMULATOR_ENDPOINT
     }
     if (endpoint.startsWith('/') && !fs.existsSync(endpoint)) {
       throw new Error(`Unix socket file ${endpoint} does not exist`);
     }
     this.endpoint = endpoint
+    this.tappdEndpoint = tappdEndpoint
   }
 
   async getKey(path: string, purpose: string = ''): Promise<GetKeyResponse> {
@@ -251,8 +258,20 @@ export class DstackClient {
    * @param altNames The alternative names of the key.
    * @returns The key.
    */
-  async deriveKey(path?: string, subject?: string, altNames?: string[]): Promise<GetKeyResponse> {
-    throw new Error('deriveKey is deprecated, please use getKey instead.')
+  async deriveKey(path?: string, subject?: string, alt_names?: string[]): Promise<GetTlsKeyResponse> {
+    console.warn('deriveKey is deprecated, please use getKey instead');
+    let raw: Record<string, any> = { path: path || '', subject: subject || path || '' }
+    if (alt_names && alt_names.length) {
+      raw['alt_names'] = alt_names
+    }
+    const payload = JSON.stringify(raw)
+    const result = await send_rpc_request<GetTlsKeyResponse>(this.tappdEndpoint, '/prpc/Tappd.DeriveKey', payload)
+    Object.defineProperty(result, 'asUint8Array', {
+      get: () => (length?: number) => x509key_to_uint8array(result.key, length),
+      enumerable: true,
+      configurable: false,
+    })
+    return Object.freeze(result)
   }
 
   /**
@@ -262,11 +281,28 @@ export class DstackClient {
    * @returns The quote.
    */
   async tdxQuote(report_data: string | Buffer | Uint8Array, hash_algorithm?: TdxQuoteHashAlgorithms): Promise<GetQuoteResponse> {
-    console.warn('tdxQuote is deprecated, please use getQuote instead')
-    if (hash_algorithm !== "raw") {
-      throw new Error('tdxQuote only supports raw hash algorithm.')
+    console.warn('tdxQuote is deprecated, please use getQuote instead');
+    let hex = to_hex(report_data)
+    if (hash_algorithm === 'raw') {
+      if (hex.length > 128) {
+        throw new Error(`Report data is too large, it should less then 64 bytes when hash_algorithm is raw.`)
+      }
+      if (hex.length < 128) {
+        hex = hex.padStart(128, '0')
+      }
     }
-    return this.getQuote(report_data)
+    const payload = JSON.stringify({ report_data: hex, hash_algorithm })
+    const result = await send_rpc_request<GetQuoteResponse>(this.tappdEndpoint, '/prpc/Tappd.TdxQuote', payload)
+    if ('error' in result) {
+      const err = result['error'] as string
+      throw new Error(err)
+    }
+    Object.defineProperty(result, 'replayRtmrs', {
+      get: () => () => reply_rtmrs(JSON.parse(result.event_log) as EventLog[]),
+      enumerable: true,
+      configurable: false,
+    })
+    return Object.freeze(result)
   }
 }
 
