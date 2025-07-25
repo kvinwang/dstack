@@ -146,6 +146,8 @@ pub struct InfoResponse {
     /// The device identifier
     pub device_id: String,
     /// The hash of the OS image
+    /// Optional: empty if OS image is not measured by KMS
+    #[serde(default)]
     pub os_image_hash: String,
     /// Information about the key provider
     pub key_provider_info: String,
@@ -176,6 +178,15 @@ pub struct TcbInfo {
     pub rtmr2: String,
     /// The value of RTMR3 (Runtime Measurement Register 3)
     pub rtmr3: String,
+    /// The hash of the OS image. This is empty if the OS image is not measured by KMS.
+    #[serde(default)]
+    pub os_image_hash: String,
+    /// The hash of the compose configuration
+    pub compose_hash: String,
+    /// The device identifier
+    pub device_id: String,
+    /// The app compose
+    pub app_compose: String,
     /// The event log entries
     pub event_log: Vec<EventLog>,
 }

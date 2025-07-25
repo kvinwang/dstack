@@ -1,3 +1,5 @@
+from dstack_sdk.dstack_client import TcbInfo
+from dstack_sdk.dstack_client import InfoResponse
 import hashlib
 import pytest
 
@@ -25,6 +27,26 @@ def test_sync_client_get_tls_key():
     assert len(result.key) > 0
     assert len(result.certificate_chain) > 0
 
+def test_sync_client_get_info():
+    client = DstackClient()
+    result = client.info()
+    check_info_response(result)
+
+def check_info_response(result: InfoResponse):
+    assert isinstance(result, InfoResponse)
+    assert isinstance(result.app_id, str)
+    assert isinstance(result.instance_id, str)
+    assert isinstance(result.tcb_info, TcbInfo)
+    assert len(result.tcb_info.mrtd) == 96
+    assert len(result.tcb_info.rtmr0) == 96
+    assert len(result.tcb_info.rtmr1) == 96
+    assert len(result.tcb_info.rtmr2) == 96
+    assert len(result.tcb_info.rtmr3) == 96
+    assert len(result.tcb_info.compose_hash) == 64
+    assert len(result.tcb_info.device_id) == 64
+    assert len(result.tcb_info.app_compose) > 0
+    assert len(result.tcb_info.event_log) > 0
+
 @pytest.mark.asyncio
 async def test_async_client_get_key():
     client = AsyncDstackClient()
@@ -45,6 +67,12 @@ async def test_async_client_get_tls_key():
     assert isinstance(result.key, str)
     assert result.key.startswith('-----BEGIN PRIVATE KEY-----')
     assert len(result.certificate_chain) > 0
+
+@pytest.mark.asyncio
+async def test_async_client_get_info():
+    client = AsyncDstackClient()
+    result = await client.info()
+    check_info_response(result)
 
 @pytest.mark.asyncio
 async def test_tls_key_uniqueness():

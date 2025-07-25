@@ -70,5 +70,21 @@ async fn test_report_data() {
 #[tokio::test]
 async fn test_info() {
     let client = AsyncDstackClient::new(None);
-    let _info = client.info().await.unwrap();
+    let info = client.info().await.unwrap();
+    assert!(!info.app_id.is_empty());
+    assert!(!info.instance_id.is_empty());
+    assert!(!info.app_cert.is_empty());
+    assert!(!info.tcb_info.mrtd.is_empty());
+    assert!(!info.tcb_info.rtmr0.is_empty());
+    assert!(!info.tcb_info.rtmr1.is_empty());
+    assert!(!info.tcb_info.rtmr2.is_empty());
+    assert!(!info.tcb_info.rtmr3.is_empty());
+    assert!(!info.tcb_info.compose_hash.is_empty());
+    assert!(!info.tcb_info.device_id.is_empty());
+    assert!(!info.tcb_info.app_compose.is_empty());
+    assert!(!info.tcb_info.event_log.is_empty());
+    assert!(!info.app_name.is_empty());
+    assert!(!info.device_id.is_empty());
+    assert!(!info.key_provider_info.is_empty());
+    assert!(!info.compose_hash.is_empty());
 }

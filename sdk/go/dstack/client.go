@@ -48,12 +48,17 @@ type EventLog struct {
 
 // Represents the TCB information
 type TcbInfo struct {
-	Mrtd     string     `json:"mrtd"`
-	Rtmr0    string     `json:"rtmr0"`
-	Rtmr1    string     `json:"rtmr1"`
-	Rtmr2    string     `json:"rtmr2"`
-	Rtmr3    string     `json:"rtmr3"`
-	EventLog []EventLog `json:"event_log"`
+	Mrtd  string `json:"mrtd"`
+	Rtmr0 string `json:"rtmr0"`
+	Rtmr1 string `json:"rtmr1"`
+	Rtmr2 string `json:"rtmr2"`
+	Rtmr3 string `json:"rtmr3"`
+	// The hash of the OS image. This is empty if the OS image is not measured by KMS.
+	OsImageHash string     `json:"os_image_hash,omitempty"`
+	ComposeHash string     `json:"compose_hash"`
+	DeviceID    string     `json:"device_id"`
+	AppCompose  string     `json:"app_compose"`
+	EventLog    []EventLog `json:"event_log"`
 }
 
 // Represents the response from an info request
@@ -65,8 +70,9 @@ type InfoResponse struct {
 	AppName         string `json:"app_name"`
 	DeviceID        string `json:"device_id"`
 	KeyProviderInfo string `json:"key_provider_info"`
-	OsImageHash     string `json:"os_image_hash"`
-	ComposeHash     string `json:"compose_hash"`
+	// Optional: empty if OS image is not measured by KMS
+	OsImageHash string `json:"os_image_hash,omitempty"`
+	ComposeHash string `json:"compose_hash"`
 }
 
 // DecodeTcbInfo decodes the TcbInfo string into a TcbInfo struct

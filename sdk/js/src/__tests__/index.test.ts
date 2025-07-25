@@ -67,6 +67,11 @@ describe('DstackClient', () => {
     expect(result.app_id).not.toBe('')
     expect(result.instance_id).not.toBe('')
     expect(result.tcb_info).not.toBe('')
+    expect(result.tcb_info).toHaveProperty('os_image_hash')
+    expect(result.tcb_info).toHaveProperty('compose_hash')
+    expect(result.tcb_info).toHaveProperty('device_id')
+    expect(result.tcb_info).toHaveProperty('app_compose')
+    expect(result.tcb_info).toHaveProperty('event_log')
   })
 
   it('should be able to decode tcb info', async () => {

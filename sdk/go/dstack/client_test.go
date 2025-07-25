@@ -409,6 +409,18 @@ func TestInfo(t *testing.T) {
 	if len(tcbInfo.EventLog) == 0 {
 		t.Error("expected event log to not be empty")
 	}
+
+	if tcbInfo.ComposeHash == "" {
+		t.Error("expected compose_hash to not be empty")
+	}
+
+	if tcbInfo.DeviceID == "" {
+		t.Error("expected device_id to not be empty")
+	}
+
+	if tcbInfo.AppCompose == "" {
+		t.Error("expected app_compose to not be empty")
+	}
 }
 
 func TestGetKeySignatureVerification(t *testing.T) {
