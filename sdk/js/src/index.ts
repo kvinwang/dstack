@@ -125,24 +125,21 @@ export interface TlsKeyOptions {
 }
 
 export class DstackClient {
-  private endpoint: string
-  private tappdEndpoint: string
+  protected endpoint: string
 
-  constructor(endpoint: string = '/var/run/dstack.sock') {
-    var tappdEndpoint = '/var/run/tappd.sock'
-    if (process.env.DSTACK_SIMULATOR_ENDPOINT) {
-      console.warn(`Using simulator endpoint: ${process.env.DSTACK_SIMULATOR_ENDPOINT}`)
-      endpoint = process.env.DSTACK_SIMULATOR_ENDPOINT
-    }
-    if (process.env.TAPPD_SIMULATOR_ENDPOINT) {
-      console.warn(`Using tappd endpoint: ${process.env.TAPPD_SIMULATOR_ENDPOINT}`)
-      tappdEndpoint = process.env.TAPPD_SIMULATOR_ENDPOINT
+  constructor(endpoint: string | undefined = undefined) {
+    if (endpoint === undefined) {
+      if (process.env.DSTACK_SIMULATOR_ENDPOINT) {
+        console.warn(`Using simulator endpoint: ${process.env.DSTACK_SIMULATOR_ENDPOINT}`)
+        endpoint = process.env.DSTACK_SIMULATOR_ENDPOINT
+      } else {
+        endpoint = '/var/run/dstack.sock'
+      }
     }
     if (endpoint.startsWith('/') && !fs.existsSync(endpoint)) {
       throw new Error(`Unix socket file ${endpoint} does not exist`);
     }
     this.endpoint = endpoint
-    this.tappdEndpoint = tappdEndpoint
   }
 
   async getKey(path: string, purpose: string = ''): Promise<GetKeyResponse> {
@@ -258,6 +255,46 @@ export class DstackClient {
    * @param altNames The alternative names of the key.
    * @returns The key.
    */
+  async deriveKey(path?: string, subject?: string, altNames?: string[]): Promise<GetTlsKeyResponse> {
+    throw new Error('deriveKey is deprecated, please use getKey instead.')
+  }
+
+  /**
+   * @deprecated Use getQuote instead.
+   * @param report_data The report data.
+   * @param hash_algorithm The hash algorithm.
+   * @returns The quote.
+   */
+  async tdxQuote(report_data: string | Buffer | Uint8Array, hash_algorithm?: TdxQuoteHashAlgorithms): Promise<GetQuoteResponse> {
+    console.warn('tdxQuote is deprecated, please use getQuote instead')
+    if (hash_algorithm !== "raw") {
+      throw new Error('tdxQuote only supports raw hash algorithm.')
+    }
+    return this.getQuote(report_data)
+  }
+}
+
+export class TappdClient extends DstackClient {
+  constructor(endpoint: string | undefined = undefined) {
+    if (endpoint === undefined) {
+      if (process.env.TAPPD_SIMULATOR_ENDPOINT) {
+        console.warn(`Using tappd endpoint: ${process.env.TAPPD_SIMULATOR_ENDPOINT}`)
+        endpoint = process.env.TAPPD_SIMULATOR_ENDPOINT
+      } else {
+        endpoint = '/var/run/tappd.sock'
+      }
+    }
+    console.warn('TappdClient is deprecated, please use DstackClient instead')
+    super(endpoint)
+  }
+
+  /**
+   * @deprecated Use getKey instead.
+   * @param path The path to the key.
+   * @param subject The subject of the key.
+   * @param altNames The alternative names of the key.
+   * @returns The key.
+   */
   async deriveKey(path?: string, subject?: string, alt_names?: string[]): Promise<GetTlsKeyResponse> {
     console.warn('deriveKey is deprecated, please use getKey instead');
     let raw: Record<string, any> = { path: path || '', subject: subject || path || '' }
@@ -265,7 +302,7 @@ export class DstackClient {
       raw['alt_names'] = alt_names
     }
     const payload = JSON.stringify(raw)
-    const result = await send_rpc_request<GetTlsKeyResponse>(this.tappdEndpoint, '/prpc/Tappd.DeriveKey', payload)
+    const result = await send_rpc_request<GetTlsKeyResponse>(this.endpoint, '/prpc/Tappd.DeriveKey', payload)
     Object.defineProperty(result, 'asUint8Array', {
       get: () => (length?: number) => x509key_to_uint8array(result.key, length),
       enumerable: true,
@@ -292,7 +329,7 @@ export class DstackClient {
       }
     }
     const payload = JSON.stringify({ report_data: hex, hash_algorithm })
-    const result = await send_rpc_request<GetQuoteResponse>(this.tappdEndpoint, '/prpc/Tappd.TdxQuote', payload)
+    const result = await send_rpc_request<GetQuoteResponse>(this.endpoint, '/prpc/Tappd.TdxQuote', payload)
     if ('error' in result) {
       const err = result['error'] as string
       throw new Error(err)
@@ -303,12 +340,5 @@ export class DstackClient {
       configurable: false,
     })
     return Object.freeze(result)
-  }
-}
-
-export class TappdClient extends DstackClient {
-  constructor(endpoint: string = '/var/run/tappd.sock') {
-    console.warn('TappdClient is deprecated, please use DstackClient instead')
-    super(endpoint)
   }
 }
