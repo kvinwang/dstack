@@ -5,6 +5,8 @@ export { getComposeHash } from './get-compose-hash'
 export { verifyEnvEncryptPublicKey } from './verify-env-encrypt-public-key'
 
 export interface GetTlsKeyResponse {
+  __name__: Readonly<'GetTlsKeyResponse'>
+
   key: string
   certificate_chain: string[]
 
@@ -12,6 +14,8 @@ export interface GetTlsKeyResponse {
 }
 
 export interface GetKeyResponse {
+  __name__: Readonly<'GetKeyResponse'>
+
   key: Uint8Array
   signature_chain: Uint8Array[]
 }
@@ -150,7 +154,8 @@ export class DstackClient {
     const result = await send_rpc_request<{ key: string, signature_chain: string[] }>(this.endpoint, '/GetKey', payload)
     return Object.freeze({
       key: new Uint8Array(Buffer.from(result.key, 'hex')),
-      signature_chain: result.signature_chain.map(sig => new Uint8Array(Buffer.from(sig, 'hex')))
+      signature_chain: result.signature_chain.map(sig => new Uint8Array(Buffer.from(sig, 'hex'))),
+      __name__: 'GetKeyResponse',
     })
   }
 
@@ -174,12 +179,12 @@ export class DstackClient {
     }
     const payload = JSON.stringify(raw)
     const result = await send_rpc_request<GetTlsKeyResponse>(this.endpoint, '/GetTlsKey', payload)
-    Object.defineProperty(result, 'asUint8Array', {
-      get: () => (length?: number) => x509key_to_uint8array(result.key, length),
-      enumerable: true,
-      configurable: false,
+    const asUint8Array = (length?: number) => x509key_to_uint8array(result.key, length)
+    return Object.freeze({
+      ...result,
+      asUint8Array,
+      __name__: 'GetTlsKeyResponse',
     })
-    return Object.freeze(result)
   }
 
   async getQuote(report_data: string | Buffer | Uint8Array): Promise<GetQuoteResponse> {
@@ -303,12 +308,12 @@ export class TappdClient extends DstackClient {
     }
     const payload = JSON.stringify(raw)
     const result = await send_rpc_request<GetTlsKeyResponse>(this.endpoint, '/prpc/Tappd.DeriveKey', payload)
-    Object.defineProperty(result, 'asUint8Array', {
-      get: () => (length?: number) => x509key_to_uint8array(result.key, length),
-      enumerable: true,
-      configurable: false,
+    const asUint8Array = (length?: number) => x509key_to_uint8array(result.key, length)
+    return Object.freeze({
+      ...result,
+      asUint8Array,
+      __name__: 'GetTlsKeyResponse',
     })
-    return Object.freeze(result)
   }
 
   /**
