@@ -46,7 +46,7 @@ export interface InfoResponse {
   tcb_info: TcbInfo
   app_name: string
   device_id: string
-  os_image_hash: string
+  os_image_hash?: string // Optional: empty if OS image is not measured by KMS
   key_provider_info: string
   compose_hash: string
 }

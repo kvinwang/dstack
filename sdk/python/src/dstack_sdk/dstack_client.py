@@ -95,6 +95,10 @@ class TcbInfo(BaseModel):
     rtmr1: str
     rtmr2: str
     rtmr3: str
+    os_image_hash: str = ""  # Optional: empty if OS image is not measured by KMS
+    compose_hash: str
+    device_id: str
+    app_compose: str
     event_log: List[EventLog]
 
 
@@ -105,7 +109,7 @@ class InfoResponse(BaseModel):
     tcb_info: TcbInfo
     app_name: str
     device_id: str
-    os_image_hash: str
+    os_image_hash: str = ""  # Optional: empty if OS image is not measured by KMS
     key_provider_info: str
     compose_hash: str
 
