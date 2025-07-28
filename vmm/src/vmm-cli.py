@@ -5,19 +5,24 @@ import sys
 import json
 import argparse
 import hashlib
-from cryptography.hazmat.primitives.asymmetric import x25519
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives import serialization
 import re
 import socket
 import http.client
 import urllib.parse
 import ssl
 
-from eth_keys import keys
-from eth_utils import keccak
-
 from typing import Optional, Dict, List, Tuple, Union, BinaryIO, Any
+
+# Optional cryptography imports - only needed for encrypted environment variables
+try:
+    from cryptography.hazmat.primitives.asymmetric import x25519
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives import serialization
+    from eth_keys import keys
+    from eth_utils import keccak
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
 
 # Default whitelist file location
 DEFAULT_KMS_WHITELIST_PATH = os.path.expanduser(
@@ -45,6 +50,12 @@ def encrypt_env(envs, hex_public_key: str) -> str:
         A hexadecimal string that is the concatenation of:
           (ephemeral public key || IV || ciphertext).
     """
+    if not CRYPTO_AVAILABLE:
+        raise ImportError(
+            "Cryptography libraries not available. Please install them with:\n"
+            "pip install cryptography eth-keys eth-utils"
+        )
+
     # Serialize the environment variables to JSON and encode to bytes.
     envs_json = json.dumps({"env": envs}).encode("utf-8")
 
@@ -236,7 +247,7 @@ class VmmCLI:
 
         headers = ['VM ID', 'App ID', 'Name', 'Status', 'Uptime']
         if verbose:
-            headers.extend(['vCPU', 'Memory', 'Disk', 'Image'])
+            headers.extend(['vCPU', 'Memory', 'Disk', 'Image', 'GPUs'])
 
         rows = []
         for vm in vms:
@@ -250,16 +261,34 @@ class VmmCLI:
 
             if verbose:
                 config = vm.get('configuration', {})
+                gpu_info = self._format_gpu_info(config.get('gpus'))
                 row.extend([
                     config.get('vcpu', '-'),
                     f"{config.get('memory', '-')}MB",
                     f"{config.get('disk_size', '-')}GB",
-                    config.get('image', '-')
+                    config.get('image', '-'),
+                    gpu_info
                 ])
 
             rows.append(row)
 
         print(format_table(rows, headers))
+
+    def _format_gpu_info(self, gpu_config):
+        """Format GPU configuration for display"""
+        if not gpu_config:
+            return '-'
+
+        attach_mode = gpu_config.get('attach_mode', '')
+        gpus = gpu_config.get('gpus', [])
+
+        if attach_mode == 'all':
+            return 'All GPUs'
+        elif attach_mode == 'listed' and gpus:
+            gpu_slots = [gpu.get('slot', 'Unknown') for gpu in gpus]
+            return ', '.join(gpu_slots)
+        else:
+            return '-'
 
     def start_vm(self, vm_id: str) -> None:
         """Start a VM"""
@@ -325,11 +354,12 @@ class VmmCLI:
             path = f"/prpc/GetAppEnvEncryptPubKey?json"
             status, response = client.request(
                 'POST', path, headers={
-                'Content-Type': 'application/json'
-            }, body={'app_id': app_id})
+                    'Content-Type': 'application/json'
+                }, body={'app_id': app_id})
             print(f"Getting encryption public key for {app_id} from {kms_url}")
         else:
-            response = self.rpc_call('GetAppEnvEncryptPubKey', {'app_id': app_id})
+            response = self.rpc_call(
+                'GetAppEnvEncryptPubKey', {'app_id': app_id})
 
         # Verify the signature if available
         if 'signature' not in response:
@@ -411,94 +441,80 @@ class VmmCLI:
         compose_hash = hashlib.sha256(compose_file.encode()).hexdigest()
         return compose_hash[:40]
 
-    def create_app_compose(self,
-                           name: str,
-                           prelaunch_script: str,
-                           docker_compose: str,
-                           kms_enabled: bool,
-                           gateway_enabled: bool,
-                           local_key_provider_enabled: bool,
-                           key_provider_id: str | None,
-                           public_logs: bool,
-                           public_sysinfo: bool,
-                           envs: Optional[Dict],
-                           no_instance_id: bool,
-                           output: str,
-                           ) -> None:
+    def create_app_compose(self, args) -> None:
         """Create a new app compose file"""
-        envs = envs or {}
+        envs = parse_env_file(args.env_file) or {}
         app_compose = {
             "manifest_version": 2,
-            "name": name,
+            "name": args.name,
             "runner": "docker-compose",
-            "docker_compose_file": open(docker_compose, 'rb').read().decode('utf-8'),
-            "kms_enabled": kms_enabled,
-            "gateway_enabled": gateway_enabled,
-            "local_key_provider_enabled": local_key_provider_enabled,
-            "key_provider_id": key_provider_id or "",
-            "public_logs": public_logs,
-            "public_sysinfo": public_sysinfo,
+            "docker_compose_file": open(args.docker_compose, 'rb').read().decode('utf-8'),
+            "kms_enabled": args.kms,
+            "gateway_enabled": args.gateway,
+            "local_key_provider_enabled": args.local_key_provider,
+            "key_provider_id": args.key_provider_id or "",
+            "public_logs": args.public_logs,
+            "public_sysinfo": args.public_sysinfo,
             "allowed_envs": [k for k in envs.keys()],
-            "no_instance_id": no_instance_id,
+            "no_instance_id": args.no_instance_id,
             "secure_time": True,
         }
-        if prelaunch_script:
-            app_compose["pre_launch_script"] = open(prelaunch_script, 'rb').read().decode('utf-8')
+        if args.prelaunch_script:
+            app_compose["pre_launch_script"] = open(
+                args.prelaunch_script, 'rb').read().decode('utf-8')
 
-        compose_file = json.dumps(app_compose, indent=4, ensure_ascii=False).encode('utf-8')
+        compose_file = json.dumps(
+            app_compose, indent=4, ensure_ascii=False).encode('utf-8')
         compose_hash = hashlib.sha256(compose_file).hexdigest()
-        with open(output, 'wb') as f:
+        with open(args.output, 'wb') as f:
             f.write(compose_file)
-        print(f"App compose file created at: {output}")
+        print(f"App compose file created at: {args.output}")
         print(f"Compose hash: {compose_hash}")
 
-    def create_vm(self, name: str, image: str, compose_file: str,
-                  vcpu: int = 1, memory: int = 1024, disk_size: int = 20,
-                  envs: Optional[Dict] = None,
-                  app_id: Optional[str] = None,
-                  ports: Optional[List[str]] = None,
-                  gpus: Optional[List[str]] = None,
-                  pin_numa: bool = False,
-                  hugepages: bool = False,
-                  kms_urls: Optional[List[str]] = None,
-                  gateway_urls: Optional[List[str]] = None,
-                  ) -> None:
+    def create_vm(self, args) -> None:
         """Create a new VM"""
         # Read and validate compose file
-        if not os.path.exists(compose_file):
-            raise Exception(f"Compose file not found: {compose_file}")
+        if not os.path.exists(args.compose):
+            raise Exception(f"Compose file not found: {args.compose}")
 
-        with open(compose_file, 'r') as f:
+        with open(args.compose, 'r') as f:
             compose_content = f.read()
+
+        envs = parse_env_file(args.env_file)
 
         # Create VM request
         params = {
-            "name": name,
-            "image": image,
+            "name": args.name,
+            "image": args.image,
             "compose_file": compose_content,
-            "vcpu": vcpu,
-            "memory": memory,
-            "disk_size": disk_size,
-            "app_id": app_id,
-            "ports": [parse_port_mapping(port) for port in ports or []],
-            "hugepages": hugepages,
-            "pin_numa": pin_numa,
+            "vcpu": args.vcpu,
+            "memory": args.memory,
+            "disk_size": args.disk,
+            "app_id": args.app_id,
+            "ports": [parse_port_mapping(port) for port in args.port or []],
+            "hugepages": args.hugepages,
+            "pin_numa": args.pin_numa,
         }
 
-        if gpus:
+        if args.ppcie:
+            params["gpus"] = {
+                "attach_mode": "all"
+            }
+        elif args.gpu:
             params["gpus"] = {
                 "attach_mode": "listed",
-                "gpus": [{"slot": gpu} for gpu in gpus or []]
+                "gpus": [{"slot": gpu} for gpu in args.gpu or []]
             }
-        if kms_urls:
-            params["kms_urls"] = kms_urls
-        if gateway_urls:
-            params["gateway_urls"] = gateway_urls
+        if args.kms_url:
+            params["kms_urls"] = args.kms_url
+        if args.gateway_url:
+            params["gateway_urls"] = args.gateway_url
 
-        app_id = app_id or self.calc_app_id(compose_content)
+        app_id = args.app_id or self.calc_app_id(compose_content)
         print(f"App ID: {app_id}")
         if envs:
-            encrypt_pubkey = self.get_app_env_encrypt_pub_key(app_id, kms_urls[0] if kms_urls else None)
+            encrypt_pubkey = self.get_app_env_encrypt_pub_key(
+                app_id, args.kms_url[0] if args.kms_url else None)
             print(
                 f"Encrypting environment variables with key: {encrypt_pubkey}")
             envs_list = [{"key": k, "value": v} for k, v in envs.items()]
@@ -519,7 +535,8 @@ class VmmCLI:
         print(f"Retrieved app ID: {app_id}")
 
         # Now get the encryption key for the app
-        encrypt_pubkey = self.get_app_env_encrypt_pub_key(app_id, kms_urls[0] if kms_urls else None)
+        encrypt_pubkey = self.get_app_env_encrypt_pub_key(
+            app_id, kms_urls[0] if kms_urls else None)
         print(f"Encrypting environment variables with key: {encrypt_pubkey}")
         envs_list = [{"key": k, "value": v} for k, v in envs.items()]
         encrypted_env = encrypt_env(envs_list, encrypt_pubkey)
@@ -709,6 +726,12 @@ def verify_signature(public_key: bytes, signature: bytes, app_id: str) -> Option
         >>> print(compressed_pubkey)
         0x0217610d74cbd39b6143842c6d8bc310d79da1d82cc9d17f8876376221eda0c38f
     """
+    if not CRYPTO_AVAILABLE:
+        raise ImportError(
+            "Cryptography libraries not available. Please install them with:\n"
+            "pip install cryptography eth-keys eth-utils"
+        )
+
     if len(signature) != 65:
         return None
 
@@ -766,8 +789,12 @@ def save_whitelist(whitelist: List[str]) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description='dstack-vmm CLI - Manage VMs')
+
+    # Get default URL from environment variable or use localhost
+    default_url = os.environ.get('DSTACK_VMM_URL', 'http://localhost:8080')
+
     parser.add_argument(
-        '--url', default='http://localhost:8080', help='dstack-vmm API URL')
+        '--url', default=default_url, help='dstack-vmm API URL (can also be set via DSTACK_VMM_URL env var)')
 
     subparsers = parser.add_subparsers(dest='command', help='Commands')
 
@@ -843,7 +870,9 @@ def main():
     deploy_parser.add_argument('--port', action='append', type=str,
                                help='Port mapping in format: protocol[:address]:from:to')
     deploy_parser.add_argument('--gpu', action='append', type=str,
-                               help='GPU in product_id')
+                               help='GPU slot to attach (can be used multiple times)')
+    deploy_parser.add_argument('--ppcie', action='store_true',
+                               help='Enable PPCIE (Protected PCIe) mode - attach all available GPUs')
     deploy_parser.add_argument('--pin-numa', action='store_true',
                                help='Pin VM to specific NUMA node')
     deploy_parser.add_argument('--hugepages', action='store_true',
@@ -919,37 +948,9 @@ def main():
     elif args.command == 'logs':
         cli.show_logs(args.vm_id, args.lines, args.follow)
     elif args.command == 'compose':
-        cli.create_app_compose(
-            name=args.name,
-            prelaunch_script=args.prelaunch_script,
-            docker_compose=args.docker_compose,
-            kms_enabled=args.kms,
-            gateway_enabled=args.gateway,
-            local_key_provider_enabled=args.local_key_provider,
-            key_provider_id=args.key_provider_id,
-            public_logs=args.public_logs,
-            public_sysinfo=args.public_sysinfo,
-            envs=parse_env_file(args.env_file),
-            no_instance_id=args.no_instance_id,
-            output=args.output
-        )
+        cli.create_app_compose(args)
     elif args.command == 'deploy':
-        cli.create_vm(
-            name=args.name,
-            image=args.image,
-            compose_file=args.compose,
-            vcpu=args.vcpu,
-            memory=args.memory,
-            disk_size=args.disk,
-            ports=args.port,
-            envs=parse_env_file(args.env_file),
-            app_id=args.app_id,
-            gpus=args.gpu,
-            hugepages=args.hugepages,
-            pin_numa=args.pin_numa,
-            kms_urls=args.kms_url,
-            gateway_urls=args.gateway_url
-        )
+        cli.create_vm(args)
     elif args.command == 'lsimage':
         images = cli.list_images()
         headers = ['Name', 'Version']
@@ -958,9 +959,11 @@ def main():
     elif args.command == 'lsgpu':
         cli.list_gpus()
     elif args.command == 'update-env':
-        cli.update_vm_env(args.vm_id, parse_env_file(args.env_file), kms_urls=args.kms_url)
+        cli.update_vm_env(args.vm_id, parse_env_file(
+            args.env_file), kms_urls=args.kms_url)
     elif args.command == 'update-user-config':
-        cli.update_vm_user_config(args.vm_id, open(args.user_config, 'r').read())
+        cli.update_vm_user_config(
+            args.vm_id, open(args.user_config, 'r').read())
     elif args.command == 'update-app-compose':
         cli.update_vm_app_compose(args.vm_id, open(args.compose, 'r').read())
     elif args.command == 'kms':
