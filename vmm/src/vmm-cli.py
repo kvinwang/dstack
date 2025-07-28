@@ -10,6 +10,7 @@ import socket
 import http.client
 import urllib.parse
 import ssl
+import base64
 
 from typing import Optional, Dict, List, Tuple, Union, BinaryIO, Any
 
@@ -133,9 +134,11 @@ class UnixSocketHTTPConnection(http.client.HTTPConnection):
 class VmmClient:
     """A unified HTTP client that supports both regular HTTP and Unix Domain Sockets."""
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, auth_user: Optional[str] = None, auth_password: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.use_uds = self.base_url.startswith('unix:')
+        self.auth_user = auth_user
+        self.auth_password = auth_password
 
         if self.use_uds:
             self.uds_path = self.base_url[5:]  # Remove 'unix:' prefix
@@ -162,6 +165,13 @@ class VmmClient:
         """
         if headers is None:
             headers = {}
+
+        # Add Basic Authentication header if credentials are provided
+        if self.auth_user and self.auth_password:
+            credentials = f"{self.auth_user}:{self.auth_password}"
+            encoded_credentials = base64.b64encode(
+                credentials.encode('utf-8')).decode('ascii')
+            headers['Authorization'] = f'Basic {encoded_credentials}'
 
         # Prepare the body
         if isinstance(body, dict):
@@ -214,12 +224,12 @@ class VmmClient:
 
 
 class VmmCLI:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, auth_user: Optional[str] = None, auth_password: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.headers = {
             'Content-Type': 'application/json'
         }
-        self.client = VmmClient(base_url)
+        self.client = VmmClient(base_url, auth_user, auth_password)
 
     def rpc_call(self, method: str, params: Optional[Dict] = None) -> Dict:
         """Make an RPC call to the dstack-vmm API"""
@@ -796,6 +806,14 @@ def main():
     parser.add_argument(
         '--url', default=default_url, help='dstack-vmm API URL (can also be set via DSTACK_VMM_URL env var)')
 
+    # Basic authentication arguments
+    parser.add_argument(
+        '--auth-user', default=os.environ.get('DSTACK_VMM_AUTH_USER'),
+        help='Basic auth username (can also be set via DSTACK_VMM_AUTH_USER env var)')
+    parser.add_argument(
+        '--auth-password', default=os.environ.get('DSTACK_VMM_AUTH_PASSWORD'),
+        help='Basic auth password (can also be set via DSTACK_VMM_AUTH_PASSWORD env var)')
+
     subparsers = parser.add_subparsers(dest='command', help='Commands')
 
     # List command
@@ -935,7 +953,7 @@ def main():
 
     args = parser.parse_args()
 
-    cli = VmmCLI(args.url)
+    cli = VmmCLI(args.url, args.auth_user, args.auth_password)
 
     if args.command == 'lsvm':
         cli.list_vms(args.verbose)

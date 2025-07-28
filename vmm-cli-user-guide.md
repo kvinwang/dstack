@@ -33,6 +33,8 @@ The VMM CLI is a single Python script (`vmm-cli.py`) that you can run directly:
 
 By default, the CLI connects to `http://localhost:8080`. You can configure the server URL in several ways:
 
+### Server URL Configuration
+
 #### Environment Variable (Recommended)
 
 Set the `DSTACK_VMM_URL` environment variable:
@@ -63,6 +65,30 @@ export DSTACK_VMM_URL=unix:/path/to/socket
 ```
 
 **Priority Order:** Command line `--url` > `DSTACK_VMM_URL` environment variable > default `http://localhost:8080`
+
+### Authentication
+
+If your dstack-vmm server requires authentication, you can provide credentials using:
+
+#### Environment Variables (Recommended)
+
+```bash
+# Set authentication credentials
+export DSTACK_VMM_AUTH_USER=your-username
+export DSTACK_VMM_AUTH_PASSWORD=your-password
+
+# Then use CLI normally
+./vmm-cli.py lsvm
+```
+
+#### Command Line Arguments
+
+```bash
+./vmm-cli.py --auth-user your-username --auth-password your-password lsvm
+```
+
+**Note:** Environment variables take precedence over command line arguments for authentication.
+
 
 ## Basic Commands
 
@@ -293,6 +319,10 @@ After successful deployment, verify your VM is running correctly:
 ```bash
 # Connect to local VMM instance
 export DSTACK_VMM_URL=http://127.0.0.1:12000
+
+# If authentication is required
+export DSTACK_VMM_AUTH_USER=your-username
+export DSTACK_VMM_AUTH_PASSWORD=your-password
 
 # Create a basic docker-compose.yml
 cat > docker-compose.yml << 'EOF'
