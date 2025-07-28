@@ -166,6 +166,8 @@ Now you can open 3 terminals to start the components:
 
 ## 📱 Usage
 
+You can manage VMs via the dashboard or [CLI](./vmm-cli-user-guide.md).
+
 ### Deploy an App
 
 Open the dstack-vmm webpage [http://localhost:9080](http://localhost:9080) (change the port according to your configuration) on your local machine to deploy a `docker-compose.yaml` file:
