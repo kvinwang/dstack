@@ -16,45 +16,29 @@ async fn main() -> anyhow::Result<()> {
     // Example usage (these will fail without a running tappd service):
 
     // 1. Derive a key
-    match client.derive_key("my/key/path").await {
-        Ok(response) => {
-            println!("Key derived successfully!");
-            println!(
-                "Certificate chain length: {}",
-                response.certificate_chain.len()
-            );
-        }
-        Err(e) => {
-            println!("Failed to derive key: {}", e);
-        }
-    }
+    let response = client.derive_key("my/key/path").await?;
+    println!("Key derived successfully!");
+    println!(
+        "Certificate chain length: {}",
+        response.certificate_chain.len()
+    );
+    let ecdsa_p256_key = response.decode_key().unwrap();
+    println!("ECDSA P-256 key length: {}", ecdsa_p256_key.len());
 
     // 2. Get a quote with 64 bytes of report data
     let mut report_data = b"Hello, world!".to_vec();
     // Pad to exactly 64 bytes for get_quote
     report_data.resize(64, 0);
-    match client.get_quote(report_data).await {
-        Ok(response) => {
-            println!("Quote generated successfully!");
-            println!("Quote length: {}", response.quote.len());
-        }
-        Err(e) => {
-            println!("Failed to get quote: {}", e);
-        }
-    }
+    let response = client.get_quote(report_data).await?;
+    println!("Quote generated successfully!");
+    println!("Quote length: {}", response.quote.len());
 
     // 3. Get instance info
-    match client.info().await {
-        Ok(info) => {
-            println!("Instance info retrieved successfully!");
-            println!("App ID: {}", info.app_id);
-            println!("Instance ID: {}", info.instance_id);
-            println!("App Name: {}", info.app_name);
-        }
-        Err(e) => {
-            println!("Failed to get instance info: {}", e);
-        }
-    }
+    let response = client.info().await?;
+    println!("Instance info retrieved successfully!");
+    println!("App ID: {}", response.app_id);
+    println!("Instance ID: {}", response.instance_id);
+    println!("App Name: {}", response.app_name);
 
     Ok(())
 }

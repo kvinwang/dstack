@@ -70,15 +70,9 @@ async fn test_tappd_client_derive_key_integration() {
     assert!(!response.key.is_empty());
 
     // Test key decoding
-    match response.to_bytes() {
-        Ok(key_bytes) => {
-            println!("  Decoded key bytes length: {}", key_bytes.len());
-            assert!(!key_bytes.is_empty());
-        }
-        Err(e) => {
-            println!("  Key decode error: {}", e);
-        }
-    }
+    let key_bytes = response.decode_key().unwrap();
+    println!("✓ Decoded key bytes length: {}", key_bytes.len());
+    assert_eq!(key_bytes.len(), 32);
 }
 
 #[tokio::test]
@@ -167,7 +161,6 @@ async fn test_tappd_client_get_quote_integration() {
     }
 }
 
-
 // Helper function to get a test client
 fn get_test_client() -> TappdClient {
     // Check for simulator endpoint first
@@ -187,7 +180,6 @@ fn get_test_client() -> TappdClient {
     TappdClient::new(None)
 }
 
-
 #[test]
 fn test_derive_key_response_decode() {
     use dstack_sdk::tappd_client::DeriveKeyResponse;
@@ -200,12 +192,9 @@ fn test_derive_key_response_decode() {
     };
 
     // The implementation should return the decoded ECDSA P-256 private key bytes
-    let bytes = response.to_bytes().unwrap();
+    let bytes = response.decode_key().unwrap();
     assert!(!bytes.is_empty());
     // For a valid ECDSA P-256 key, we should get either 32 bytes (the private key)
     // or fall back to the full DER contents if parsing fails
-    assert!(bytes.len() == 32 || bytes.len() > 32);
+    assert_eq!(bytes.len(), 32);
 }
-
-
-

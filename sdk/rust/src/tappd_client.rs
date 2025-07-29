@@ -87,7 +87,7 @@ pub struct DeriveKeyResponse {
 
 impl DeriveKeyResponse {
     /// Decodes the key from PEM format and extracts the raw ECDSA P-256 private key bytes
-    pub fn to_bytes(&self) -> Result<Vec<u8>, anyhow::Error> {
+    pub fn decode_key(&self) -> Result<Vec<u8>, anyhow::Error> {
         use x509_parser::der_parser::der::parse_der;
         use x509_parser::pem::parse_x509_pem;
 

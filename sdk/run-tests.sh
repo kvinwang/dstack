@@ -14,6 +14,8 @@ popd
 
 pushd rust/
 cargo test -- --show-output
+cargo run --example tappd_client_usage
+cargo run --example dstack_client_usage
 popd
 
 pushd go/
