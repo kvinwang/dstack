@@ -2186,6 +2186,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
+ "x509-parser",
 ]
 
 [[package]]

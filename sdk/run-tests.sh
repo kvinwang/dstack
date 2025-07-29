@@ -13,7 +13,9 @@ trap "kill $SIMULATOR_PID 2>/dev/null || true" EXIT
 popd
 
 pushd rust/
-cargo test
+cargo test -- --show-output
+cargo run --example tappd_client_usage
+cargo run --example dstack_client_usage
 popd
 
 pushd go/

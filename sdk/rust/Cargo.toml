@@ -10,13 +10,14 @@ authors = ["Encifher <encifher@rizelabs.io>"]
 alloy = { workspace = true, features = ["signers", "signer-local"] }
 anyhow.workspace = true
 bon.workspace = true
-hex.workspace = true 
-http.workspace = true 
+hex.workspace = true
+http.workspace = true
 http-client-unix-domain-socket = "0.1.1"
 reqwest = { workspace = true, features = ["json"] }
-serde.workspace = true 
-serde_json.workspace = true 
-sha2.workspace = true 
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+x509-parser.workspace = true
 
 [dev-dependencies]
 dcap-qvl.workspace = true
