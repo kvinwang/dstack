@@ -55,6 +55,7 @@ jobs:
           provenance: false
           build-args: |
             DSTACK_REV=${{ env.GIT_REV }}
+            DSTACK_SRC_URL=${{ github.server_url }}/${{ github.repository }}
             SOURCE_DATE_EPOCH=${{ env.TIMESTAMP }}
 
       - name: Generate artifact attestation
@@ -64,10 +65,26 @@ jobs:
           subject-digest: ${{ steps.build-and-push.outputs.digest }}
           push-to-registry: true
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: kms/auth-eth/package-lock.json
+
+      - name: Install dependencies and compile contracts
+        run: |
+          cd kms/auth-eth
+          npm ci
+          npx hardhat compile
+
       - name: GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           name: "KMS Release v${{ env.VERSION }}"
+          files: |
+            kms/auth-eth/artifacts/contracts/DstackKms.sol/DstackKms.json
+            kms/auth-eth/artifacts/contracts/DstackApp.sol/DstackApp.json
           body: |
             ## Docker Image Information
 
@@ -76,3 +93,9 @@ jobs:
             **Digest (SHA256)**: `${{ steps.build-and-push.outputs.digest }}`
 
             **Verification**: [Verify on Sigstore](https://search.sigstore.dev/?hash=${{ steps.build-and-push.outputs.digest }})
+
+            ## Contract ABIs
+
+            This release includes the compiled contract ABIs:
+            - `DstackKms.json` - Main KMS contract ABI
+            - `DstackApp.json` - Application contract ABI
