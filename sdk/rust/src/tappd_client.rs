@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Context as _, Result};
 use hex::{encode as hex_encode, FromHexError};
 use http_client_unix_domain_socket::{ClientUnix, Method};
 use reqwest::Client;
@@ -86,32 +86,52 @@ pub struct DeriveKeyResponse {
 }
 
 impl DeriveKeyResponse {
-    /// Decodes the key from PEM/base64 format to bytes, optionally truncating to max_length
-    pub fn to_bytes(&self, max_length: Option<usize>) -> Result<Vec<u8>, anyhow::Error> {
-        let mut content = self.key.clone();
+    /// Decodes the key from PEM format and extracts the raw ECDSA P-256 private key bytes
+    pub fn to_bytes(&self) -> Result<Vec<u8>, anyhow::Error> {
+        use x509_parser::der_parser::der::parse_der;
+        use x509_parser::pem::parse_x509_pem;
 
-        // Remove PEM headers if present
-        content = content.replace("-----BEGIN PRIVATE KEY-----", "");
-        content = content.replace("-----END PRIVATE KEY-----", "");
-        content = content.replace('\n', "");
+        let key_content = self.key.trim();
 
-        let binary = if content.chars().all(|c| c.is_ascii_hexdigit()) {
-            // Handle hex-encoded content
-            hex::decode(content)?
-        } else {
-            // Handle base64-encoded content
-            use base64::Engine;
-            base64::engine::general_purpose::STANDARD
-                .decode(content)
-                .map_err(|e| anyhow::anyhow!("Failed to decode base64: {}", e))?
-        };
-
-        if let Some(max_len) = max_length {
-            if binary.len() > max_len {
-                return Ok(binary[..max_len].to_vec());
-            }
+        let (_, pem) = parse_x509_pem(key_content.as_bytes()).context("Failed to parse PEM")?;
+        // Parse PKCS#8 PrivateKeyInfo structure
+        // PKCS#8 format: SEQUENCE { version, algorithm, privateKey }
+        let (_, der_seq) = parse_der(&pem.contents).context("Failed to parse DER")?;
+        let sequence = der_seq.as_sequence().context("Expected SEQUENCE")?;
+        if sequence.len() < 3 {
+            bail!("Invalid PKCS#8 structure: expected at least 3 elements");
         }
-        Ok(binary)
+
+        // The privateKey is the 3rd element (index 2) and should be an OCTET STRING
+        let private_key_data = sequence[2]
+            .content
+            .as_slice()
+            .context("Could not extract privateKey data")?;
+
+        // For ECDSA keys, the private key is wrapped in another DER structure
+        // Parse the inner ECDSA private key structure
+        let (_, inner_der) = parse_der(private_key_data).context("Failed to parse inner DER")?;
+
+        let inner_sequence = inner_der.as_sequence().context("Expected inner SEQUENCE")?;
+
+        if inner_sequence.len() < 2 {
+            return Err(anyhow::anyhow!("Invalid ECDSA private key structure"));
+        }
+
+        // The actual private key value is the 2nd element (index 1) as OCTET STRING
+        let key_bytes = inner_sequence[1]
+            .content
+            .as_slice()
+            .context("Could not extract key bytes")?;
+
+        if key_bytes.len() != 32 {
+            bail!(
+                "Expected 32-byte ECDSA P-256 private key, got {} bytes",
+                key_bytes.len()
+            );
+        }
+
+        Ok(key_bytes.to_vec())
     }
 }
 
@@ -298,68 +318,10 @@ impl TappdClient {
         Ok(response)
     }
 
-    /// Sends a TDX quote request using SHA512 as the default hash algorithm
-    pub async fn tdx_quote(&self, report_data: Vec<u8>) -> Result<TdxQuoteResponse> {
-        self.tdx_quote_with_hash_algorithm(report_data, QuoteHashAlgorithm::Sha512)
-            .await
-    }
-
-    /// Sends a TDX quote request with a specific hash algorithm
-    pub async fn tdx_quote_with_hash_algorithm(
-        &self,
-        mut report_data: Vec<u8>,
-        hash_algorithm: QuoteHashAlgorithm,
-    ) -> Result<TdxQuoteResponse> {
-        // For RAW algorithm, ensure report_data is exactly 64 bytes
-        if matches!(hash_algorithm, QuoteHashAlgorithm::Raw) {
-            if report_data.len() > 64 {
-                anyhow::bail!("Report data is too large, it should be at most 64 bytes when hash_algorithm is RAW");
-            }
-            if report_data.len() < 64 {
-                // Left-pad with zeros
-                let mut padded = vec![0u8; 64 - report_data.len()];
-                padded.extend_from_slice(&report_data);
-                report_data = padded;
-            }
-        }
-
-        let payload = json!({
-            "report_data": hex_encode(report_data),
-            "hash_algorithm": hash_algorithm.as_str(),
-        });
-
-        let response = self
-            .send_rpc_request("/prpc/Tappd.TdxQuote", &payload)
-            .await?;
-        Ok(response)
-    }
-
-    /// Sends a TDX quote request with custom prefix and hash algorithm
-    pub async fn tdx_quote_with_prefix(
-        &self,
-        report_data: Vec<u8>,
-        hash_algorithm: QuoteHashAlgorithm,
-        prefix: Option<&str>,
-    ) -> Result<TdxQuoteResponse> {
-        let mut payload = json!({
-            "report_data": hex_encode(report_data),
-            "hash_algorithm": hash_algorithm.as_str(),
-        });
-
-        if let Some(prefix) = prefix {
-            payload["prefix"] = json!(prefix);
-        }
-
-        let response = self
-            .send_rpc_request("/prpc/Tappd.TdxQuote", &payload)
-            .await?;
-        Ok(response)
-    }
-
     /// Sends a raw quote request with 64 bytes of report data
-    pub async fn raw_quote(&self, report_data: Vec<u8>) -> Result<TdxQuoteResponse> {
+    pub async fn get_quote(&self, report_data: Vec<u8>) -> Result<TdxQuoteResponse> {
         if report_data.len() != 64 {
-            anyhow::bail!("Report data must be exactly 64 bytes for raw quote");
+            bail!("Report data must be exactly 64 bytes for raw quote");
         }
 
         let payload = json!({

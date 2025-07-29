@@ -2176,7 +2176,6 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
- "base64",
  "bon",
  "dcap-qvl",
  "hex",
@@ -2187,6 +2186,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
+ "x509-parser",
 ]
 
 [[package]]

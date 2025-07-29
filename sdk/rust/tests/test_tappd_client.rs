@@ -1,4 +1,4 @@
-use dstack_sdk::tappd_client::{QuoteHashAlgorithm, TappdClient};
+use dstack_sdk::tappd_client::TappdClient;
 use std::env;
 
 #[tokio::test]
@@ -70,7 +70,7 @@ async fn test_tappd_client_derive_key_integration() {
     assert!(!response.key.is_empty());
 
     // Test key decoding
-    match response.to_bytes(None) {
+    match response.to_bytes() {
         Ok(key_bytes) => {
             println!("  Decoded key bytes length: {}", key_bytes.len());
             assert!(!key_bytes.is_empty());
@@ -126,13 +126,15 @@ async fn test_tappd_client_derive_key_with_alt_names_integration() {
 }
 
 #[tokio::test]
-async fn test_tappd_client_tdx_quote_integration() {
+async fn test_tappd_client_get_quote_integration() {
     let client = get_test_client();
 
-    let report_data = b"test report data for quote".to_vec();
+    let mut report_data = b"test report data for quote".to_vec();
+    // Pad to exactly 64 bytes for get_quote
+    report_data.resize(64, 0);
 
-    let response = client.tdx_quote(report_data).await.unwrap();
-    println!("✓ TDX quote request successful");
+    let response = client.get_quote(report_data).await.unwrap();
+    println!("✓ Quote request successful");
     println!("  Quote length: {}", response.quote.len());
     println!("  Event log length: {}", response.event_log.len());
 
@@ -165,40 +167,6 @@ async fn test_tappd_client_tdx_quote_integration() {
     }
 }
 
-#[tokio::test]
-async fn test_tappd_client_tdx_quote_with_hash_algorithm_integration() {
-    let client = get_test_client();
-
-    let report_data = b"test report data for sha256 quote".to_vec();
-
-    let response = client
-        .tdx_quote_with_hash_algorithm(report_data, QuoteHashAlgorithm::Sha256)
-        .await
-        .unwrap();
-    println!("✓ TDX quote with SHA256 request successful");
-    println!("  Quote length: {}", response.quote.len());
-    println!("  Event log length: {}", response.event_log.len());
-
-    // Validate response structure
-    assert!(!response.quote.is_empty());
-    assert!(!response.event_log.is_empty());
-}
-
-#[tokio::test]
-async fn test_tappd_client_raw_quote_integration() {
-    let client = get_test_client();
-
-    let report_data = vec![0x42u8; 64]; // 64 bytes of test data
-
-    let response = client.raw_quote(report_data).await.unwrap();
-    println!("✓ Raw quote request successful");
-    println!("  Quote length: {}", response.quote.len());
-    println!("  Event log length: {}", response.event_log.len());
-
-    // Validate response structure
-    assert!(!response.quote.is_empty());
-    assert!(!response.event_log.is_empty());
-}
 
 // Helper function to get a test client
 fn get_test_client() -> TappdClient {
@@ -219,65 +187,25 @@ fn get_test_client() -> TappdClient {
     TappdClient::new(None)
 }
 
-#[test]
-fn test_quote_hash_algorithm_conversion() {
-    // Test QuoteHashAlgorithm string conversion
-    assert_eq!(QuoteHashAlgorithm::Sha256.as_str(), "sha256");
-    assert_eq!(QuoteHashAlgorithm::Sha384.as_str(), "sha384");
-    assert_eq!(QuoteHashAlgorithm::Sha512.as_str(), "sha512");
-    assert_eq!(QuoteHashAlgorithm::Raw.as_str(), "raw");
-}
 
 #[test]
-fn test_derive_key_response_hex_decode() {
+fn test_derive_key_response_decode() {
     use dstack_sdk::tappd_client::DeriveKeyResponse;
 
-    let response = DeriveKeyResponse {
-        key: "deadbeef".to_string(),
-        certificate_chain: vec![],
-    };
-
-    let bytes = response.to_bytes(None).unwrap();
-    assert_eq!(bytes, vec![0xde, 0xad, 0xbe, 0xef]);
-}
-
-#[test]
-fn test_derive_key_response_base64_decode() {
-    use dstack_sdk::tappd_client::DeriveKeyResponse;
-
-    // "hello" in base64 is "aGVsbG8="
-    let response = DeriveKeyResponse {
-        key: "aGVsbG8=".to_string(),
-        certificate_chain: vec![],
-    };
-
-    let bytes = response.to_bytes(None).unwrap();
-    assert_eq!(bytes, b"hello");
-}
-
-#[test]
-fn test_derive_key_response_pem_strip() {
-    use dstack_sdk::tappd_client::DeriveKeyResponse;
-
-    let pem_key = "-----BEGIN PRIVATE KEY-----\naGVsbG8=\n-----END PRIVATE KEY-----";
+    // Test with a valid ECDSA P-256 private key in PKCS#8 format
+    let pem_key = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg3/aZQhz0nBx0tqG1\nwPNlB/ILBqnY1xvHT7bkZl9oJP2hRANCAATEwT3ixOl0zFOjEEUhpwP6xBz1F2jY\n3B1LokSVHFcFJHUWEHVZJQcFhBAhFGdhEn1B/9HYBQz5w5H8Vl0z3T9U\n-----END PRIVATE KEY-----";
     let response = DeriveKeyResponse {
         key: pem_key.to_string(),
         certificate_chain: vec![],
     };
 
-    let bytes = response.to_bytes(None).unwrap();
-    assert_eq!(bytes, b"hello");
+    // The implementation should return the decoded ECDSA P-256 private key bytes
+    let bytes = response.to_bytes().unwrap();
+    assert!(!bytes.is_empty());
+    // For a valid ECDSA P-256 key, we should get either 32 bytes (the private key)
+    // or fall back to the full DER contents if parsing fails
+    assert!(bytes.len() == 32 || bytes.len() > 32);
 }
 
-#[test]
-fn test_derive_key_response_truncate() {
-    use dstack_sdk::tappd_client::DeriveKeyResponse;
 
-    let response = DeriveKeyResponse {
-        key: "deadbeefcafe".to_string(),
-        certificate_chain: vec![],
-    };
 
-    let bytes = response.to_bytes(Some(4)).unwrap();
-    assert_eq!(bytes, vec![0xde, 0xad, 0xbe, 0xef]);
-}

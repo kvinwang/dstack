@@ -1,4 +1,4 @@
-use dstack_sdk::tappd_client::{QuoteHashAlgorithm, TappdClient};
+use dstack_sdk::tappd_client::TappdClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -29,34 +29,21 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // 2. Get a TDX quote
-    let report_data = b"Hello, world!".to_vec();
-    match client.tdx_quote(report_data).await {
+    // 2. Get a quote with 64 bytes of report data
+    let mut report_data = b"Hello, world!".to_vec();
+    // Pad to exactly 64 bytes for get_quote
+    report_data.resize(64, 0);
+    match client.get_quote(report_data).await {
         Ok(response) => {
-            println!("TDX quote generated successfully!");
+            println!("Quote generated successfully!");
             println!("Quote length: {}", response.quote.len());
         }
         Err(e) => {
-            println!("Failed to get TDX quote: {}", e);
+            println!("Failed to get quote: {}", e);
         }
     }
 
-    // 3. Get a TDX quote with specific hash algorithm
-    let report_data = b"Hello, world!".to_vec();
-    match client
-        .tdx_quote_with_hash_algorithm(report_data, QuoteHashAlgorithm::Sha256)
-        .await
-    {
-        Ok(response) => {
-            println!("TDX quote with SHA256 generated successfully!");
-            println!("Quote length: {}", response.quote.len());
-        }
-        Err(e) => {
-            println!("Failed to get TDX quote with SHA256: {}", e);
-        }
-    }
-
-    // 4. Get instance info
+    // 3. Get instance info
     match client.info().await {
         Ok(info) => {
             println!("Instance info retrieved successfully!");

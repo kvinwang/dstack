@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### TappdClient (Legacy API)
 
 ```rust
-use dstack_sdk::tappd_client::{TappdClient, QuoteHashAlgorithm};
+use dstack_sdk::tappd_client::TappdClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -61,21 +61,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Key: {}", key_resp.key);
     println!("Certificate Chain: {:?}", key_resp.certificate_chain);
 
-    // Generate TDX quote with default SHA512
-    let quote_resp = client.tdx_quote(b"test-data".to_vec()).await?;
+    // Decode the key to bytes (extracts raw ECDSA P-256 private key - 32 bytes)
+    let key_bytes = key_resp.to_bytes()?;
+    println!("ECDSA P-256 private key bytes (32 bytes): {:?}", key_bytes.len());
+
+    // Generate quote (exactly 64 bytes of report data required)
+    let mut report_data = b"test-data".to_vec();
+    report_data.resize(64, 0); // Pad to 64 bytes
+    let quote_resp = client.get_quote(report_data).await?;
     println!("Quote: {}", quote_resp.quote);
     let rtmrs = quote_resp.replay_rtmrs()?;
     println!("Replayed RTMRs: {:?}", rtmrs);
-
-    // Generate TDX quote with specific hash algorithm
-    let quote_resp = client.tdx_quote_with_hash_algorithm(
-        b"test-data".to_vec(),
-        QuoteHashAlgorithm::Sha256
-    ).await?;
-
-    // Generate raw quote (exactly 64 bytes)
-    let raw_data = vec![0u8; 64];
-    let raw_quote = client.raw_quote(raw_data).await?;
 
     Ok(())
 }
@@ -131,8 +127,9 @@ Fetches metadata and measurements about the CVM instance.
 
 #### `derive_key(path: &str) -> DeriveKeyResponse`
 Derives a key for a specified path.
-- `key`: Private key (PEM or hex format)
+- `key`: ECDSA P-256 private key in PEM format
 - `certificate_chain`: Vec of X.509 certificate chain entries
+- `to_bytes()`: Extracts and returns the raw ECDSA P-256 private key bytes (32 bytes)
 
 #### `derive_key_with_subject(path: &str, subject: &str) -> DeriveKeyResponse`
 Derives a key with a custom certificate subject.
@@ -140,13 +137,7 @@ Derives a key with a custom certificate subject.
 #### `derive_key_with_subject_and_alt_names(path: &str, subject: Option<&str>, alt_names: Option<Vec<String>>) -> DeriveKeyResponse`
 Derives a key with full certificate customization.
 
-#### `tdx_quote(report_data: Vec<u8>) -> TdxQuoteResponse`
-Generates a TDX quote using SHA512 hash algorithm.
-
-#### `tdx_quote_with_hash_algorithm(report_data: Vec<u8>, algorithm: QuoteHashAlgorithm) -> TdxQuoteResponse`
-Generates a TDX quote with a specific hash algorithm (SHA256, SHA384, SHA512, etc.).
-
-#### `raw_quote(report_data: Vec<u8>) -> TdxQuoteResponse`
+#### `get_quote(report_data: Vec<u8>) -> TdxQuoteResponse`
 Generates a TDX quote with exactly 64 bytes of raw report data.
 
 ### Structures
