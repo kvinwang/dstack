@@ -166,7 +166,7 @@ Now you can open 3 terminals to start the components:
 
 ## 📱 Usage
 
-You can manage VMs via the dashboard or [CLI](./vmm-cli-user-guide.md).
+You can manage VMs via the dashboard or [CLI](./docs/vmm-cli-user-guide.md).
 
 ### Deploy an App
 
